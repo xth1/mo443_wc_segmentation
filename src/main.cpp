@@ -1,7 +1,7 @@
 #include <cv.h>
 #include <highgui.h>
 
-int main ( int argc, char **argv )
+int main(int argc, char **argv)
 {
 /* OpenCv Test */
 
