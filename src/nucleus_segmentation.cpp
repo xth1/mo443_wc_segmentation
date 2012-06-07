@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <vector>
-
+#define MAX_COLOR 255
 using namespace std;
 
 typedef IplImage* ImageType;
@@ -30,10 +30,22 @@ PixelType& get_px(const ImageType image, int row, int col)
 	return px;
 }
 
+void invert_colors(ImageType &image){
+	int height = image->height;
+	int width  = image->width;
+	
+	for (int i = 0; i < height; ++i) {
+		for (int j = 0; j < width; ++j) {
+				PixelType &val=get_px(image,i,j);
+				val = MAX_COLOR - val;
+		}
+	}
+}
+
 /**
  * Performs the Scale-space Toggle Simplification
  */
-ImageType scale_space_toggle_simplification(ImageType image, int k = 10)
+ImageType scale_space_toggle_simplification(ImageType image, int k = 7)
 {
 	int raw_element[] = {0, -2, -2, -2, -2, -2, -2, -2, -2};
 
@@ -49,7 +61,7 @@ ImageType scale_space_toggle_simplification(ImageType image, int k = 10)
 	
 	
 	// Psi1 is the image dilated k times by the element
-	// similarly, psi2 is the image dilated k times by the structuring element
+	// similarly, psi2 is the image eroded k times by the structuring element
 	cvDilate(image, psi1, element, k);
 	cvErode(image, psi2, element, k);
 	
@@ -95,16 +107,33 @@ ImageType wbc_nucleus_segmentation(const ImageType image)
 	ImageType threshold_image 
 		= cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
 	
+	ImageType gradient_image_16S
+		=cvCreateImage(cvGetSize(image), IPL_DEPTH_16S, 1);	
+	
+	ImageType gradient_image_8U=
+		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
+	
+	ImageType toggle_image;
+
 	// Create a binary image, 'threshold_image', by thresholding;
-	cvThreshold(image, threshold_image, 90, 255, CV_THRESH_BINARY);
+	cvThreshold(image, threshold_image, 90, 255, CV_THRESH_BINARY_INV);
 	
 	// Create a simplified image, simplified_image, applying the Scale-space
 	//	Toggle Operator in 'threshold_image';
-	return scale_space_toggle_simplification(threshold_image);
+	toggle_image = scale_space_toggle_simplification(image);
 	
+	// compute the gradient from Is, using Sobel operator
+	// it use first derivate in horizontal and vertical directions
+	//  and a 3 x 3 kernel
+	 cvSobel(toggle_image,gradient_image_16S,1,1,3);
+	 
+	//convert gradient image to adequate scale and invert its color
+	 cvConvertScaleAbs(gradient_image_16S,gradient_image_8U,1,0);
+	 invert_colors(gradient_image_8U);
+	 
 	// compute an erosion on Is to discard small residues;
 	// 6: compute the watershed transform using Ib as markers 
-	//	and Is to compute the gradient;
+	return gradient_image_8U;	
 }
 
 
@@ -129,9 +158,11 @@ int main(int argc, char* argv[])
 	cvShowImage("Original", image);
 	cvMoveWindow("Original", 10, 40);
 	
-	cvNamedWindow("After Toggle", 1);
-	cvShowImage("After Toggle", toggle);
-	cvMoveWindow("After Toggle", 10, 40);
+	cvNamedWindow("After Toggle and Gradient", 1);
+	cvShowImage("After Toggle and Gradient", toggle);
+	cvMoveWindow("After Toggle and Gradient", 10, 40);
+
+	
 	
 	cvWaitKey(-1);
 
