@@ -12,11 +12,17 @@
 #include <algorithm>
 #include <cstdlib>
 #include <vector>
+
+#include "opencv2/imgproc/imgproc.hpp"
+
 #define MAX_COLOR 255
 using namespace std;
+using namespace cv;
+
 
 typedef IplImage* ImageType;
 typedef uint8_t PixelType;
+
 
 
 /**
@@ -40,6 +46,71 @@ void invert_colors(ImageType &image){
 				val = MAX_COLOR - val;
 		}
 	}
+}
+
+void apply_watershed(Mat original_image,Mat image, Mat markerMask,
+	Mat &wshed){
+	
+	Mat imgGray;
+	Mat markers(markerMask.size(), CV_32S);
+	
+	vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+            
+    findContours(markerMask, contours, hierarchy, CV_RETR_CCOMP, 
+    CV_CHAIN_APPROX_SIMPLE);
+	
+	
+    markers = Scalar::all(0);
+   
+    cvtColor(markerMask, imgGray, CV_GRAY2BGR);
+    
+    int idx = 0;
+    int compCount=0;
+    for( ; idx >= 0; idx = hierarchy[idx][0], compCount++ )
+		drawContours(markers, contours, idx, Scalar::all(compCount+1),
+		 -1, 8, hierarchy, INT_MAX);
+
+	cvtColor(original_image, imgGray, CV_GRAY2BGR);
+	
+    vector<Vec3b> colorTab;
+    for(int  i = 0; i < compCount; i++ )
+    {
+		int b = theRNG().uniform(0, 255);
+        int g = theRNG().uniform(0, 255);
+        int r = theRNG().uniform(0, 255);
+                
+        colorTab.push_back(Vec3b((uchar)b, (uchar)g, (uchar)r));
+        }
+
+        double t = (double)getTickCount();
+            
+        Mat nimg;   
+            
+        cvtColor(image, nimg, CV_GRAY2BGR);
+
+        watershed(nimg,markers);
+        wshed = Mat(markerMask.size(), CV_8UC3);
+            
+        // paint the watershed image
+        int i,j;
+        for( i = 0; i < markers.rows; i++ )
+        {
+			for( j = 0; j < markers.cols; j++ )
+            {
+					
+				int idx = markers.at<int>(i,j);
+				if( idx == -1 )
+					wshed.at<Vec3b>(i,j) = Vec3b(255,255,255);
+				else if( idx <= 0 || idx > compCount )
+					wshed.at<Vec3b>(i,j) = Vec3b(0,0,0);
+				else
+					wshed.at<Vec3b>(i,j) = colorTab[idx - 1];
+				}
+               
+		}
+
+        wshed = wshed*0.5 + imgGray*0.5;
 }
 
 /**
@@ -99,10 +170,40 @@ ImageType scale_space_toggle_simplification(ImageType image, int k = 7)
 	return result;
 }
 
+
+void generate_external_seeds(ImageType &image)
+{
+	int height = image->height;
+	int width  = image->width;
+	
+	
+	int T=5;
+	for (int i = 0; i < height; ++i) {
+		for(int k=0;k<T;k++){
+			PixelType &val=get_px(image,i,k);
+			val = MAX_COLOR;
+			
+			PixelType &val2=get_px(image,i,width-k-1);
+			val2 = MAX_COLOR;
+		}
+	}
+	
+	for (int j = 0; j < width; ++j) {
+			for(int k=0;k<T;k++){
+				PixelType &val=get_px(image,k,j);
+				val = MAX_COLOR;
+				
+				PixelType &val2=get_px(image,height-k-1,j);
+				val2 = MAX_COLOR;
+			}
+	}
+	
+	
+}
 /**
  * Main function to perform the WBC nucleus segmentation
  */
-ImageType wbc_nucleus_segmentation(const ImageType image)
+void wbc_nucleus_segmentation(const ImageType image, Mat &wshed)
 {
 	ImageType threshold_image 
 		= cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
@@ -117,23 +218,24 @@ ImageType wbc_nucleus_segmentation(const ImageType image)
 
 	// Create a binary image, 'threshold_image', by thresholding;
 	cvThreshold(image, threshold_image, 90, 255, CV_THRESH_BINARY_INV);
-	
+		
 	// Create a simplified image, simplified_image, applying the Scale-space
 	//	Toggle Operator in 'threshold_image';
 	toggle_image = scale_space_toggle_simplification(image);
 	
-	// compute the gradient from Is, using Sobel operator
-	// it use first derivate in horizontal and vertical directions
-	//  and a 3 x 3 kernel
-	 cvSobel(toggle_image,gradient_image_16S,1,1,3);
-	 
-	//convert gradient image to adequate scale and invert its color
-	 cvConvertScaleAbs(gradient_image_16S,gradient_image_8U,1,0);
+	// compute the gradient from Is
+	 cvMorphologyEx(toggle_image, gradient_image_8U, NULL, NULL, MORPH_GRADIENT, 5);
 	 invert_colors(gradient_image_8U);
-	 
 	// compute an erosion on Is to discard small residues;
 	// 6: compute the watershed transform using Ib as markers 
-	return gradient_image_8U;	
+	generate_external_seeds(threshold_image);
+	
+	cvNamedWindow("threshold_image", 1);
+	cvShowImage("threshold_image", threshold_image);
+	cvMoveWindow("threshold_image", 10, 40);
+
+	apply_watershed(Mat(image),Mat(gradient_image_8U),Mat(threshold_image),wshed);
+
 }
 
 
@@ -152,14 +254,20 @@ int main(int argc, char* argv[])
 		return 2;
 	}
 	
-	ImageType toggle = wbc_nucleus_segmentation(image);
+	
 	
 	cvNamedWindow("Original", 1);
 	cvShowImage("Original", image);
 	cvMoveWindow("Original", 10, 40);
 	
+	
+	Mat wshed;
+	
+	wbc_nucleus_segmentation(image,wshed);
+	
+	IplImage result =wshed;
 	cvNamedWindow("After Toggle and Gradient", 1);
-	cvShowImage("After Toggle and Gradient", toggle);
+	cvShowImage("After Toggle and Gradient", &result);
 	cvMoveWindow("After Toggle and Gradient", 10, 40);
 
 	
@@ -169,7 +277,7 @@ int main(int argc, char* argv[])
 	cvDestroyWindow("Original");
 	cvDestroyWindow("After Toggle");
 	cvReleaseImage(&image);
-	cvReleaseImage(&toggle);
+	//cvReleaseImage(&result);
 	
 	return 0;
 }
