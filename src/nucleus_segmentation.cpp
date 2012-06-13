@@ -105,13 +105,13 @@ ImageType scale_space_toggle_simplification(ImageType image, int k = 7)
  */
 ImageType wbc_nucleus_segmentation(const ImageType image)
 {
-	ImageType threshold_image 
-		= cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
+	ImageType threshold_image = 
+		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
 	
-	ImageType gradient_image_16S
-		=cvCreateImage(cvGetSize(image), IPL_DEPTH_16S, 1);	
+	ImageType gradient_image_16S = 
+		cvCreateImage(cvGetSize(image), IPL_DEPTH_16S, 1);	
 	
-	ImageType gradient_image_8U=
+	ImageType gradient_image_8U = 
 		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
 	
 	ImageType toggle_image;
@@ -123,16 +123,18 @@ ImageType wbc_nucleus_segmentation(const ImageType image)
 	//	Toggle Operator in 'threshold_image';
 	toggle_image = scale_space_toggle_simplification(image);
 	
-	// compute the gradient from Is, using Sobel operator
+	// Compute an erosion on Is to discard small residues;
+	cvErode(toggle_image, toggle_image, NULL, 2);
+	
+	// Compute the gradient from Is, using Sobel operator
 	// it use first derivate in horizontal and vertical directions
 	//  and a 3 x 3 kernel
 	cvSobel(toggle_image, gradient_image_16S, 1, 1, 3);
 	 
-	//convert gradient image to adequate scale and invert its color
+	// Convert gradient image to adequate scale and invert its color
 	cvConvertScaleAbs(gradient_image_16S, gradient_image_8U, 1, 0);
 	invert_colors(gradient_image_8U);
 	 
-	// compute an erosion on Is to discard small residues;
 	// 6: compute the watershed transform using Ib as markers 
 	return gradient_image_8U;	
 }
@@ -162,8 +164,6 @@ int main(int argc, char* argv[])
 	cvNamedWindow("After Toggle and Gradient", 1);
 	cvShowImage("After Toggle and Gradient", toggle);
 	cvMoveWindow("After Toggle and Gradient", 10, 40);
-
-	
 	
 	cvWaitKey(-1);
 
