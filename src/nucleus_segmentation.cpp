@@ -12,12 +12,13 @@
 #include <algorithm>
 #include <cstdlib>
 #include <vector>
-#define MAX_COLOR 255
+
 using namespace std;
 
 typedef IplImage* ImageType;
 typedef uint8_t PixelType;
 
+const PixelType MAX_COLOR = 255;
 
 /**
  * Returns a reference to the pixel (row, col) of the image
@@ -30,14 +31,14 @@ PixelType& get_px(const ImageType image, int row, int col)
 	return px;
 }
 
-void invert_colors(ImageType &image){
+void invert_colors(ImageType& image){
 	int height = image->height;
 	int width  = image->width;
 	
 	for (int i = 0; i < height; ++i) {
 		for (int j = 0; j < width; ++j) {
-				PixelType &val=get_px(image,i,j);
-				val = MAX_COLOR - val;
+			PixelType& val = get_px(image, i, j);
+			val = MAX_COLOR - val;
 		}
 	}
 }
@@ -125,11 +126,11 @@ ImageType wbc_nucleus_segmentation(const ImageType image)
 	// compute the gradient from Is, using Sobel operator
 	// it use first derivate in horizontal and vertical directions
 	//  and a 3 x 3 kernel
-	 cvSobel(toggle_image,gradient_image_16S,1,1,3);
+	cvSobel(toggle_image, gradient_image_16S, 1, 1, 3);
 	 
 	//convert gradient image to adequate scale and invert its color
-	 cvConvertScaleAbs(gradient_image_16S,gradient_image_8U,1,0);
-	 invert_colors(gradient_image_8U);
+	cvConvertScaleAbs(gradient_image_16S, gradient_image_8U, 1, 0);
+	invert_colors(gradient_image_8U);
 	 
 	// compute an erosion on Is to discard small residues;
 	// 6: compute the watershed transform using Ib as markers 
