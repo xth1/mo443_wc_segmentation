@@ -40,8 +40,7 @@ void invert_colors(ImageType &image)
 	
 	for (int i = 0; i < height; ++i) {
 		for (int j = 0; j < width; ++j) {
-				PixelType& val = get_px(image, i, j);
-				val = MAX_COLOR - val;
+			get_px(image, i, j) = MAX_COLOR - val;
 		}
 	}
 }
@@ -84,7 +83,7 @@ void apply_watershed(Mat original_image, Mat image, Mat markerMask, Mat& wshed)
 
 	cvtColor(image, nimg, CV_GRAY2BGR);
 
-	watershed(nimg,markers);
+	watershed(nimg, markers);
 	wshed = Mat(markerMask.size(), CV_8UC3);
    
 	// paint the watershed image
