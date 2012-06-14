@@ -40,7 +40,8 @@ void invert_colors(ImageType &image)
 	
 	for (int i = 0; i < height; ++i) {
 		for (int j = 0; j < width; ++j) {
-			get_px(image, i, j) = MAX_COLOR - val;
+			PixelType& val = get_px(image, i, j);
+			val = MAX_COLOR - val;
 		}
 	}
 }
@@ -108,9 +109,9 @@ void apply_watershed(Mat original_image, Mat image, Mat markerMask, Mat& wshed)
 /**
  * Performs the Scale-space Toggle Simplification
  */
-ImageType scale_space_toggle_simplification(ImageType image, int k = 15)
+ImageType scale_space_toggle_simplification(ImageType image, int k = 10)
 {
-	int raw_element[] = {0, -2, -2, -2, -2, -2, -2, -2, -2};
+	static int raw_element[] = {0, -10, -10, -10, -10, -10, -10, -10, -10};
 
 	// Create a 3x3 scaled (scale=2) structuring element
 	IplConvKernel* element = 
@@ -158,63 +159,10 @@ ImageType scale_space_toggle_simplification(ImageType image, int k = 15)
 	// Freeing resources
 	cvReleaseImage(&psi1);
 	cvReleaseImage(&psi2);
+	cvReleaseStructuringElement(&element);
 
 	return result;
 }
-
-
-/**
- * Performs the threshold (eq 6)
- */
-ImageType threshold(ImageType image, int k = 10)
-{
-	int raw_element[] = {0, -1, -1, -1, -1, -1, -1, -1,-1,-1};
-
-	// Create a 3x3 scaled (scale=2) structuring element
-	IplConvKernel* element = 
-		cvCreateStructuringElementEx(3, 3, 1, 1, 
-			CV_SHAPE_CUSTOM, 
-			raw_element
-		);
-
-	ImageType psi1 = cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
-	ImageType psi2 = cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
-
-	// Psi1 is the image dilated k times by the element
-	// similarly, psi2 is the image eroded k times by the structuring element
-	cvDilate(image, psi1, element, k);
-	cvErode(image, psi2, element, k);
-	
-	// This is where we store the resulting image
-	ImageType result = cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
-	
-	int height = image->height;
-	int width  = image->width;
-
-	// Eq. 6
-	for (int i = 0; i < height; ++i) {
-		for (int j = 0; j < width; ++j) {
-			PixelType psi1_val  = get_px(psi1, i, j);
-			PixelType psi2_val  = get_px(psi2, i, j);
-			PixelType image_val = get_px(image, i, j);
-			PixelType& res_val  = get_px(result, i, j);
-
-			if (psi1_val - image_val <= image_val - psi2_val) {
-				res_val = 255;
-			}
-			else {
-				res_val = 0;
-			}
-		}
-	}
-
-	// Freeing resources
-	cvReleaseImage(&psi1);
-	cvReleaseImage(&psi2);
-
-	return result;
-}
-
 
 void generate_external_seeds(ImageType& image)
 {
@@ -242,22 +190,10 @@ void generate_external_seeds(ImageType& image)
  */
 void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 {
-	int raw_element[] = {0, -2, -2, -2, -2, -2, -2, -2, -2};
-	
-	// Create a 3x3 scaled (scale=2) structuring element to erode image
-	IplConvKernel* element = 
-		cvCreateStructuringElementEx(3, 3, 1, 1, 
-			CV_SHAPE_CUSTOM, 
-			raw_element
-		);
-
 	ImageType threshold_image =
-		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
-
-	ImageType eroded_image = 
 		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);	
 
-	ImageType gradient_image_8U =
+	ImageType gradient_image_8u =
 		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
 
 	ImageType toggle_image;
@@ -270,35 +206,35 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 	toggle_image = scale_space_toggle_simplification(image);
 
 	// compute an erosion on Is to discard small residues;
-	cvErode(toggle_image, eroded_image, element, 1);
+	cvErode(toggle_image, toggle_image, NULL, 1);
 
 	// compute the gradient from Is
-	 cvMorphologyEx(toggle_image, gradient_image_8U, NULL, 
+	cvMorphologyEx(toggle_image, gradient_image_8u, NULL, 
 		NULL, MORPH_GRADIENT, 1);
-	
-	invert_colors(gradient_image_8U);
 
-	// 6: compute the watershed transform using Ib as markers 
+	invert_colors(gradient_image_8u);
+
 	generate_external_seeds(threshold_image);
-	
+
 	cvNamedWindow("threshold_image", 1);
 	cvShowImage("threshold_image", threshold_image);
 	cvMoveWindow("threshold_image", 10, 40);
-	
+
 	cvNamedWindow("toggle_image", 1);
 	cvShowImage("toggle_image", toggle_image);
 	cvMoveWindow("toggle_image", 10, 40);
-	
-	cvNamedWindow("Eroded image", 1);
-	cvShowImage("Eroded image", eroded_image);
-	cvMoveWindow("Eroded image", 10, 40);
-	
+
 	cvNamedWindow("gradient_image", 1);
-	cvShowImage("gradient_image", gradient_image_8U);
+	cvShowImage("gradient_image", gradient_image_8u);
 	cvMoveWindow("gradient_image", 10, 40);
 	
-	apply_watershed(Mat(image), Mat(gradient_image_8U),
+	// 6: compute the watershed transform using Ib as markers
+	apply_watershed(Mat(image), Mat(gradient_image_8u),
 		Mat(threshold_image), wshed);
+				
+	cvReleaseImage(&threshold_image);
+	cvReleaseImage(&toggle_image);
+	cvReleaseImage(&gradient_image_8u);
 }
 
 
