@@ -111,7 +111,7 @@ void apply_watershed(Mat original_image, Mat image, Mat markerMask, Mat& wshed)
  */
 ImageType scale_space_toggle_simplification(ImageType image, int k = 10)
 {
-	static int raw_element[] = {0, -10, -10, -10, -10, -10, -10, -10, -10};
+	static int raw_element[] = {-2, -1, -2, -1, 0, -1, -2, -1, -2};
 
 	// Create a 3x3 scaled (scale=2) structuring element
 	IplConvKernel* element = 
@@ -228,7 +228,7 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 
 	invert_colors(gradient_image_8u);
 
-	generate_external_seeds(threshold_image);
+	generate_external_seeds(threshold_without_holes);
 
 	cvNamedWindow("threshold_without_holes", 1);
 	cvShowImage("threshold_without_holes", threshold_without_holes);
