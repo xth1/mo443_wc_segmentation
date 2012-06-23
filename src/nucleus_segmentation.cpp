@@ -201,19 +201,26 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 	
 	ImageType mask_image 
 		= cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
+	
+	ImageType smooth_image=
+		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
 
 	ImageType toggle_image;
 
 	// Create a binary image, 'threshold_image', by thresholding;
+	//cvSmooth(image,smooth_image,CV_MEDIAN,5,5);
 	cvThreshold(image, threshold_image, 90, 255, THRESH_BINARY_INV);
 	mask_image=cvCloneImage(threshold_image);
 	//Find holes
 	CvPoint seed_point = cvPoint(2,2);
 	cvFloodFill( mask_image, seed_point, cvScalarAll(255),
-				cvScalarAll(20), cvScalarAll(20), NULL, 8,NULL );
+				cvScalarAll(0), cvScalarAll(0), NULL, 8,NULL );
 	invert_colors(mask_image);
 	//Remove holes
 	cvAdd(mask_image,threshold_image,threshold_without_holes,NULL);
+	
+	cvMorphologyEx(threshold_without_holes,threshold_without_holes,NULL,
+				NULL,MORPH_CLOSE,1);
 	
 	// Create a simplified image, simplified_image, applying the Scale-space
 	//	Toggle Operator in 'threshold_image';
@@ -234,6 +241,10 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 	cvShowImage("threshold_without_holes", threshold_without_holes);
 	cvMoveWindow("threshold_without_holes", 10, 40);
 
+	cvNamedWindow("mask_image", 1);
+	cvShowImage("mask_image", mask_image);
+	cvMoveWindow("mask_image", 10, 40);
+	
 	cvNamedWindow("toggle_image", 1);
 	cvShowImage("toggle_image", toggle_image);
 	cvMoveWindow("toggle_image", 10, 40);
