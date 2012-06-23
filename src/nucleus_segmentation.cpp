@@ -195,12 +195,26 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 
 	ImageType gradient_image_8u =
 		cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
+	
+	ImageType threshold_without_holes 
+		= cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
+	
+	ImageType mask_image 
+		= cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, 1);
 
 	ImageType toggle_image;
 
 	// Create a binary image, 'threshold_image', by thresholding;
 	cvThreshold(image, threshold_image, 90, 255, THRESH_BINARY_INV);
-
+	mask_image=cvCloneImage(threshold_image);
+	//Find holes
+	CvPoint seed_point = cvPoint(2,2);
+	cvFloodFill( mask_image, seed_point, cvScalarAll(255),
+				cvScalarAll(20), cvScalarAll(20), NULL, 8,NULL );
+	invert_colors(mask_image);
+	//Remove holes
+	cvAdd(mask_image,threshold_image,threshold_without_holes,NULL);
+	
 	// Create a simplified image, simplified_image, applying the Scale-space
 	//	Toggle Operator in 'threshold_image';
 	toggle_image = scale_space_toggle_simplification(image);
@@ -216,9 +230,9 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 
 	generate_external_seeds(threshold_image);
 
-	cvNamedWindow("threshold_image", 1);
-	cvShowImage("threshold_image", threshold_image);
-	cvMoveWindow("threshold_image", 10, 40);
+	cvNamedWindow("threshold_without_holes", 1);
+	cvShowImage("threshold_without_holes", threshold_without_holes);
+	cvMoveWindow("threshold_without_holes", 10, 40);
 
 	cvNamedWindow("toggle_image", 1);
 	cvShowImage("toggle_image", toggle_image);
@@ -230,7 +244,7 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 	
 	// 6: compute the watershed transform using Ib as markers
 	apply_watershed(Mat(image), Mat(gradient_image_8u),
-		Mat(threshold_image), wshed);
+		Mat(threshold_without_holes), wshed);
 				
 	cvReleaseImage(&threshold_image);
 	cvReleaseImage(&toggle_image);
