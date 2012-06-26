@@ -71,7 +71,7 @@ void apply_watershed(Mat original_image, Mat image, Mat markerMask, Mat& wshed)
 	cvtColor(original_image, imgGray, CV_GRAY2BGR);
 
     vector<Vec3b> colorTab;
-    for (int i = 0; i < compCount; ++i) {
+    for (int i = 0; i < 2; ++i) {
 		PixelType b = theRNG().uniform(0, 255);
 		PixelType g = theRNG().uniform(0, 255);
 		PixelType r = theRNG().uniform(0, 255);
@@ -86,19 +86,15 @@ void apply_watershed(Mat original_image, Mat image, Mat markerMask, Mat& wshed)
 
 	watershed(nimg, markers);
 	wshed = Mat(markerMask.size(), CV_8UC3);
-   
+	
+	int back = markers.at<int>(1, 1);
+	
 	// paint the watershed image
 	for (int i = 0; i < markers.rows; ++i) {
 		for (int j = 0; j < markers.cols; ++j) {
 			int idx = markers.at<int>(i, j);
-			if (idx == -1) {
-				wshed.at<Vec3b>(i, j) = Vec3b(255, 255, 255);
-			}
-			else if (idx <= 0 || idx > compCount) {
-				wshed.at<Vec3b>(i, j) = Vec3b(0, 0, 0);
-			}
-			else {
-				wshed.at<Vec3b>(i, j) = colorTab[idx - 1];
+			if (idx != back) {
+				wshed.at<Vec3b>(i, j) = colorTab[1];
 			}
 		}
 	}
@@ -109,7 +105,7 @@ void apply_watershed(Mat original_image, Mat image, Mat markerMask, Mat& wshed)
 /**
  * Performs the Scale-space Toggle Simplification
  */
-ImageType scale_space_toggle_simplification(ImageType image, int k = 10)
+ImageType scale_space_toggle_simplification(ImageType image, int k = 300)
 {
 	static int raw_element[] = {-2, -1, -2, -1, 0, -1, -2, -1, -2};
 
@@ -208,7 +204,7 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 	ImageType toggle_image;
 
 	// Create a binary image, 'threshold_image', by thresholding;
-	cvThreshold(image, threshold_image, 90, 255, THRESH_BINARY_INV);
+	cvThreshold(image, threshold_image, 73, 255, THRESH_BINARY_INV);
 	
 	mask_image = cvCloneImage(threshold_image);
 	
@@ -222,16 +218,20 @@ void wbc_nucleus_segmentation(const ImageType image, Mat& wshed)
 
 	// Remove holes
 	cvAdd(mask_image, threshold_image, threshold_without_holes, NULL);
+
+	// Create a 3x3 scaled (scale=2) structuring element
+	IplConvKernel* element = 
+		cvCreateStructuringElementEx(7, 7, 3, 3, CV_SHAPE_RECT);
 	
 	cvMorphologyEx(threshold_without_holes, threshold_without_holes, NULL,
-				NULL, MORPH_CLOSE, 1);
+				element, MORPH_OPEN, 1);
 	
 	// Create a simplified image, simplified_image, applying the Scale-space
 	//	Toggle Operator in 'threshold_image';
 	toggle_image = scale_space_toggle_simplification(image);
 
 	// compute an erosion on Is to discard small residues;
-	cvErode(toggle_image, toggle_image, NULL, 1);
+	cvDilate(toggle_image, toggle_image, NULL, 1);
 
 	// compute the gradient from Is
 	cvMorphologyEx(toggle_image, gradient_image_8u, NULL, 
